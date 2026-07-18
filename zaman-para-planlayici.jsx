@@ -14,12 +14,14 @@ const fmtPct = (v) =>
 
 const MAX_MONTHS = 120;
 
-function simulate({ capital, installment, remaining, monthlyReturn, payFromCapital, target }) {
+function simulate({ capital, installment, remaining, monthlyReturn, payFromCapital, target, annualInflation = 0 }) {
   const rows = [];
+  const inflM = annualInflation > 0 ? Math.pow(1 + annualInflation / 100, 1 / 12) : 1;
   let cap = capital;
   let busted = null;
   let targetMonth = null;
-  let debtFreeMonth = remaining === 0 ? 0 : null;
+  let realTargetMonth = null;
+  let debtFreeMonth = remaining === 0 || installment <= 0 ? 0 : null;
 
   for (let m = 1; m <= MAX_MONTHS; m++) {
     const start = cap;
@@ -27,29 +29,32 @@ function simulate({ capital, installment, remaining, monthlyReturn, payFromCapit
     const after = start - taksit;
     if (after <= 0 && busted === null) {
       busted = m;
-      rows.push({ m, start, taksit, after, profit: 0, end: after, debt: installment * Math.max(0, remaining - m), net: after - installment * Math.max(0, remaining - m) });
+      rows.push({ m, start, taksit, after, profit: 0, end: after, real: after / Math.pow(inflM, m), debt: installment * Math.max(0, remaining - m), net: after - installment * Math.max(0, remaining - m) });
       break;
     }
     const profit = after * (monthlyReturn / 100);
     const end = after + profit;
+    const real = end / Math.pow(inflM, m); // bugünkü alım gücüyle
     const debt = installment * Math.max(0, remaining - m);
     const net = end - debt;
-    rows.push({ m, start, taksit, after, profit, end, debt, net });
+    rows.push({ m, start, taksit, after, profit, end, real, debt, net });
     if (debtFreeMonth === null && debt === 0) debtFreeMonth = m;
     if (targetMonth === null && end >= target) targetMonth = m;
+    if (realTargetMonth === null && real >= target) realTargetMonth = m;
     cap = end;
-    if (targetMonth !== null && m >= remaining) break;
+    if (targetMonth !== null && realTargetMonth !== null && m >= remaining) break;
   }
-  return { rows, busted, targetMonth, debtFreeMonth };
+  return { rows, busted, targetMonth, realTargetMonth, debtFreeMonth };
 }
 
-function requiredReturn({ capital, installment, remaining, payFromCapital, target, months }) {
+function requiredReturn({ capital, installment, remaining, payFromCapital, target, months, annualInflation = 0, real = false }) {
   // binary search monthly return (%) so that capital >= target at `months`
   let lo = 0, hi = 300, ok = null;
   for (let i = 0; i < 60; i++) {
     const mid = (lo + hi) / 2;
-    const { busted, targetMonth } = simulate({ capital, installment, remaining, monthlyReturn: mid, payFromCapital, target });
-    const reached = !busted && targetMonth !== null && targetMonth <= months;
+    const { busted, targetMonth, realTargetMonth } = simulate({ capital, installment, remaining, monthlyReturn: mid, payFromCapital, target, annualInflation });
+    const reach = real ? realTargetMonth : targetMonth;
+    const reached = !busted && reach !== null && reach <= months;
     if (reached) { ok = mid; hi = mid; } else { lo = mid; }
   }
   return ok;
@@ -66,7 +71,10 @@ function Field({ label, suffix, value, onChange, step = 1, min = 0 }) {
           value={value}
           min={min}
           step={step}
-          onChange={(e) => onChange(e.target.value === "" ? 0 : parseFloat(e.target.value))}
+          onChange={(e) => {
+            const v = e.target.value === "" ? 0 : parseFloat(e.target.value);
+            onChange(Number.isFinite(v) ? Math.max(min, v) : 0);
+          }}
           className="field-input"
         />
         {suffix && <span className="field-suffix">{suffix}</span>}
@@ -83,10 +91,12 @@ export default function App() {
   const [monthlyReturn, setMonthlyReturn] = useState(5);
   const [deadline, setDeadline] = useState(12);
   const [payFromCapital, setPayFromCapital] = useState(true);
+  const [inflation, setInflation] = useState(0); // yıllık %, 0 = kapalı
+  const [pinned, setPinned] = useState(null); // sabitlenen senaryo girdileri
 
   const sim = useMemo(
-    () => simulate({ capital, installment, remaining, monthlyReturn, payFromCapital, target }),
-    [capital, installment, remaining, monthlyReturn, payFromCapital, target]
+    () => simulate({ capital, installment, remaining, monthlyReturn, payFromCapital, target, annualInflation: inflation }),
+    [capital, installment, remaining, monthlyReturn, payFromCapital, target, inflation]
   );
 
   const reqReturn = useMemo(
@@ -94,12 +104,50 @@ export default function App() {
     [capital, installment, remaining, payFromCapital, target, deadline]
   );
 
+  const reqReturnReal = useMemo(
+    () => (inflation > 0 ? requiredReturn({ capital, installment, remaining, payFromCapital, target, months: deadline, annualInflation: inflation, real: true }) : null),
+    [capital, installment, remaining, payFromCapital, target, deadline, inflation]
+  );
+
+  const pinnedSim = useMemo(
+    () => (pinned ? simulate({ ...pinned, annualInflation: pinned.inflation }) : null),
+    [pinned]
+  );
+  const pinnedReq = useMemo(
+    () => (pinned ? requiredReturn({ ...pinned, months: pinned.deadline }) : null),
+    [pinned]
+  );
+
   const totalDebt = installment * remaining;
-  const shownRows = sim.rows.slice(0, sim.targetMonth ? sim.targetMonth : Math.min(sim.rows.length, 36));
-  const chartRows = shownRows.map((r) => ({ ay: r.m, Sermaye: Math.round(r.end), "Net (Sermaye − Borç)": Math.round(r.net) }));
+  const shownRows = sim.rows.slice(0, (sim.realTargetMonth ?? sim.targetMonth) || Math.min(sim.rows.length, 36));
+  const pinnedRows = pinnedSim
+    ? pinnedSim.rows.slice(0, (pinnedSim.realTargetMonth ?? pinnedSim.targetMonth) || Math.min(pinnedSim.rows.length, 36))
+    : [];
+  const chartRows = [];
+  for (let i = 0; i < Math.max(shownRows.length, pinnedRows.length); i++) {
+    const r = shownRows[i], p = pinnedRows[i];
+    const row = { ay: i + 1 };
+    if (r) {
+      row.Sermaye = Math.round(r.end);
+      row["Net (Sermaye − Borç)"] = Math.round(r.net);
+      if (inflation > 0) row["Reel Sermaye"] = Math.round(r.real);
+    }
+    if (p) row.Sabitlenen = Math.round(p.end);
+    chartRows.push(row);
+  }
 
   const riskLevel =
     reqReturn === null ? "impossible" : reqReturn > 10 ? "high" : reqReturn > 4 ? "mid" : "ok";
+
+  const reachInfo = (s) =>
+    s.busted ? { txt: "Sermaye bitiyor", cls: "neg" }
+      : s.targetMonth ? { txt: s.targetMonth + " ay", cls: "pos" }
+        : { txt: ">" + MAX_MONTHS + " ay", cls: "amb" };
+  const debtInfo = (s, inp) =>
+    inp.installment * inp.remaining <= 0 ? "Borç yok"
+      : inp.payFromCapital
+        ? (s.busted && s.debtFreeMonth === null ? "—" : (s.debtFreeMonth ?? inp.remaining) + ". ay")
+        : inp.remaining + ". ay";
 
   return (
     <div className="app">
@@ -127,6 +175,8 @@ export default function App() {
         .toggle{display:flex;gap:6px;margin-bottom:4px}
         .toggle button{flex:1;padding:8px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit}
         .toggle button.on{border-color:var(--amber);color:var(--amber);background:rgba(255,176,32,.08)}
+        .pinbtn{width:100%;margin-top:12px;padding:9px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--amber);font-size:12.5px;cursor:pointer;font-family:inherit}
+        .pinbtn:hover{border-color:var(--amber)}
         .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
         @media(max-width:640px){.cards{grid-template-columns:1fr}}
         .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
@@ -168,6 +218,7 @@ export default function App() {
             <Field label="Hedef tutar" suffix="TL" value={target} onChange={setTarget} step={5000} />
             <Field label="Beklenen aylık getiri" suffix="%" value={monthlyReturn} onChange={setMonthlyReturn} step={0.5} />
             <Field label="Hedef için süre sınırı" suffix="ay" value={deadline} onChange={setDeadline} step={1} min={1} />
+            <Field label="Yıllık enflasyon (opsiyonel)" suffix="%" value={inflation} onChange={setInflation} step={5} />
             <span className="field-label">Taksitin kaynağı</span>
             <div className="toggle" role="group" aria-label="Taksitin kaynağı">
               <button className={payFromCapital ? "on" : ""} onClick={() => setPayFromCapital(true)}>Sermayeden</button>
@@ -176,6 +227,12 @@ export default function App() {
             <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 10 }}>
               Kalan toplam borç: <span className="mono amb">{fmtTL(totalDebt)}</span>
             </p>
+            <button
+              className="pinbtn"
+              onClick={() => setPinned(pinned ? null : { capital, installment, remaining, target, monthlyReturn, deadline, payFromCapital, inflation })}
+            >
+              {pinned ? "Sabitlenen senaryoyu kaldır" : "Senaryoyu sabitle ve karşılaştır"}
+            </button>
           </div>
 
           {/* readouts */}
@@ -183,10 +240,11 @@ export default function App() {
             <div className="cards">
               <div className="card">
                 <div className="lbl">Hedefe ulaşma</div>
-                <div className={"val " + (sim.busted ? "neg" : sim.targetMonth ? "pos" : "amb")}>
-                  {sim.busted ? "Sermaye bitiyor" : sim.targetMonth ? sim.targetMonth + " ay" : ">" + MAX_MONTHS + " ay"}
-                </div>
+                <div className={"val " + reachInfo(sim).cls}>{reachInfo(sim).txt}</div>
                 <div className="sub">%{monthlyReturn} aylık getiri varsayımıyla</div>
+                {inflation > 0 && !sim.busted && (
+                  <div className="sub">Reel (bugünkü alım gücüyle): {sim.realTargetMonth ? sim.realTargetMonth + " ay" : ">" + MAX_MONTHS + " ay"}</div>
+                )}
               </div>
               <div className="card">
                 <div className="lbl">Gerekli aylık getiri</div>
@@ -194,13 +252,63 @@ export default function App() {
                   {reqReturn === null ? "—" : fmtPct(reqReturn)}
                 </div>
                 <div className="sub">{deadline} ayda {fmtTL0(target)} hedefi için</div>
+                {inflation > 0 && (
+                  <div className="sub">Reel hedef için: {reqReturnReal === null ? "ulaşılamıyor" : fmtPct(reqReturnReal)}</div>
+                )}
               </div>
               <div className="card">
                 <div className="lbl">Borç bitişi</div>
-                <div className="val amb">{payFromCapital ? (sim.busted && (sim.debtFreeMonth === null) ? "—" : (sim.debtFreeMonth ?? remaining) + ". ay") : remaining + ". ay"}</div>
-                <div className="sub">Toplam {fmtTL0(totalDebt)} taksit ödemesi</div>
+                <div className="val amb">{debtInfo(sim, { installment, remaining, payFromCapital })}</div>
+                <div className="sub">{totalDebt > 0 ? "Toplam " + fmtTL0(totalDebt) + " taksit ödemesi" : "Taksit yükü yok"}</div>
               </div>
             </div>
+
+            {/* comparison */}
+            {pinned && pinnedSim && (
+              <div className="panel" style={{ marginTop: 12 }}>
+                <h2>Senaryo karşılaştırma</h2>
+                <div className="tblwrap" style={{ marginTop: 0 }}>
+                  <table>
+                    <thead>
+                      <tr><th></th><th>Sabitlenen</th><th>Şimdiki</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>Mevcut sermaye</td><td>{fmtTL0(pinned.capital)}</td><td>{fmtTL0(capital)}</td></tr>
+                      <tr><td>Aylık taksit</td><td>{fmtTL0(pinned.installment)} × {pinned.remaining} ay</td><td>{fmtTL0(installment)} × {remaining} ay</td></tr>
+                      <tr><td>Taksitin kaynağı</td><td>{pinned.payFromCapital ? "Sermayeden" : "Gelirden"}</td><td>{payFromCapital ? "Sermayeden" : "Gelirden"}</td></tr>
+                      <tr><td>Hedef</td><td>{fmtTL0(pinned.target)}</td><td>{fmtTL0(target)}</td></tr>
+                      <tr><td>Beklenen aylık getiri</td><td>{fmtPct(pinned.monthlyReturn)}</td><td>{fmtPct(monthlyReturn)}</td></tr>
+                      <tr><td>Yıllık enflasyon</td><td>{pinned.inflation > 0 ? fmtPct(pinned.inflation) : "—"}</td><td>{inflation > 0 ? fmtPct(inflation) : "—"}</td></tr>
+                      <tr>
+                        <td>Hedefe ulaşma</td>
+                        <td className={reachInfo(pinnedSim).cls}>{reachInfo(pinnedSim).txt}</td>
+                        <td className={reachInfo(sim).cls}>{reachInfo(sim).txt}</td>
+                      </tr>
+                      {(pinned.inflation > 0 || inflation > 0) && (
+                        <tr>
+                          <td>Reel hedefe ulaşma</td>
+                          <td>{pinned.inflation > 0 && !pinnedSim.busted ? (pinnedSim.realTargetMonth ? pinnedSim.realTargetMonth + " ay" : ">" + MAX_MONTHS + " ay") : "—"}</td>
+                          <td>{inflation > 0 && !sim.busted ? (sim.realTargetMonth ? sim.realTargetMonth + " ay" : ">" + MAX_MONTHS + " ay") : "—"}</td>
+                        </tr>
+                      )}
+                      <tr>
+                        <td>Gerekli aylık getiri</td>
+                        <td>{pinnedReq === null ? "—" : fmtPct(pinnedReq) + " (" + pinned.deadline + " ayda)"}</td>
+                        <td>{reqReturn === null ? "—" : fmtPct(reqReturn) + " (" + deadline + " ayda)"}</td>
+                      </tr>
+                      <tr>
+                        <td>Borç bitişi</td>
+                        <td>{debtInfo(pinnedSim, pinned)}</td>
+                        <td>{debtInfo(sim, { installment, remaining, payFromCapital })}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p style={{ fontSize: 11, color: "var(--muted)", margin: "10px 0 0" }}>
+                  Sabitlenen senaryonun sermaye eğrisi grafikte mavi çizgiyle gösterilir.
+                </p>
+              </div>
+            )}
 
             {/* runway strip */}
             <div className="panel" style={{ marginTop: 12 }}>
@@ -237,6 +345,8 @@ export default function App() {
                   <Area type="monotone" dataKey="Net (Sermaye − Borç)" fill="rgba(255,176,32,0.08)" stroke="none" />
                   <Line type="monotone" dataKey="Sermaye" stroke="#FFB020" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="Net (Sermaye − Borç)" stroke="#3ECF8E" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
+                  {inflation > 0 && <Line type="monotone" dataKey="Reel Sermaye" stroke="#7E8AA0" strokeWidth={1.5} dot={false} strokeDasharray="2 4" />}
+                  {pinned && <Line type="monotone" dataKey="Sabitlenen" stroke="#6FA8FF" strokeWidth={1.5} dot={false} />}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -262,7 +372,7 @@ export default function App() {
             <thead>
               <tr>
                 <th>Ay</th><th>Ay Başı</th><th>Taksit</th><th>Taksit Sonrası</th>
-                <th>Kâr (%{monthlyReturn})</th><th>Ay Sonu</th><th>Kalan Borç</th><th>Net Değer</th>
+                <th>Kâr (%{monthlyReturn})</th><th>Ay Sonu</th>{inflation > 0 && <th>Reel Sermaye</th>}<th>Kalan Borç</th><th>Net Değer</th>
               </tr>
             </thead>
             <tbody>
@@ -274,6 +384,7 @@ export default function App() {
                   <td>{fmtTL(r.after)}</td>
                   <td className="pos">+{fmtTL(r.profit)}</td>
                   <td className={r.end >= target ? "pos" : r.end < capital ? "neg" : "amb"}>{fmtTL(r.end)}</td>
+                  {inflation > 0 && <td style={{ color: "var(--muted)" }}>{fmtTL(r.real)}</td>}
                   <td>{r.debt > 0 ? fmtTL(r.debt) : "0,00 TL"}</td>
                   <td className={r.net >= 0 ? "pos" : "neg"}>{fmtTL(r.net)}</td>
                 </tr>
