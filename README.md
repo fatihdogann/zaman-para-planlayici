@@ -66,3 +66,14 @@ Sayıları okurken bunları akılda tut:
 - **Simülasyon 120 ayda kesilir.**
 
 Bu bir planlama simülasyonudur, yatırım tavsiyesi değildir. Aracın asıl faydası hedefe ulaşmayı vaat etmesi değil, bazı hedeflerin gerektirdiği getirinin ne kadar gerçekdışı olduğunu göstermesidir.
+
+---
+
+## Geliştirici
+
+**Mehmet Fatih Doğan** — backend geliştirici, güvenlik meraklısı.
+
+- 🌐 Portfolyo & iletişim: [mehmetfatihdogan.com.tr](https://mehmetfatihdogan.com.tr)
+- 💻 GitHub: [@fatihdogann](https://github.com/fatihdogann)
+
+Proje hakkında soru, hata bildirimi veya geri bildirim için [iletişim sayfamdan](https://mehmetfatihdogan.com.tr/iletisim) ulaşabilirsin.
