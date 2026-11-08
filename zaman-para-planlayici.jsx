@@ -84,6 +84,18 @@ function Field({ label, suffix, value, onChange, step = 1, min = 0 }) {
 }
 
 export default function App() {
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem("zaman-para-theme");
+      if (saved === "light" || saved === "dark") return saved;
+    } catch {}
+    return matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  });
+  function toggleTheme() {
+    const next = theme === "light" ? "dark" : "light";
+    setTheme(next);
+    try { localStorage.setItem("zaman-para-theme", next); } catch {}
+  }
   const [capital, setCapital] = useState(70472);
   const [installment, setInstallment] = useState(14201.22);
   const [remaining, setRemaining] = useState(6);
@@ -150,12 +162,18 @@ export default function App() {
         : inp.remaining + ". ay";
 
   return (
-    <div className="app">
+    <div className="app" data-theme={theme}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-        :root{
+        .app{
+          color-scheme:dark;
           --bg:#0C0F14; --panel:#141A22; --panel2:#10151D; --line:#232C38;
-          --amber:#FFB020; --pos:#3ECF8E; --neg:#F2555A; --txt:#E9E7DF; --muted:#7E8AA0;
+          --amber:#FFB020; --pos:#3ECF8E; --neg:#F2555A; --txt:#E9E7DF; --muted:#9BA8BC; --blue:#6FA8FF;
+        }
+        .app[data-theme="light"]{
+          color-scheme:light;
+          --bg:#F5F4EF; --panel:#FFFFFF; --panel2:#F8F7F2; --line:#D8D6CC;
+          --amber:#865009; --pos:#116943; --neg:#AA3039; --txt:#252823; --muted:#565D58; --blue:#245FB3;
         }
         *{box-sizing:border-box}
         .app{min-height:100vh;background:var(--bg);color:var(--txt);font-family:'Sora',system-ui,sans-serif;padding:20px}
@@ -163,10 +181,12 @@ export default function App() {
         .shell{max-width:1100px;margin:0 auto}
         header h1{font-size:22px;font-weight:700;margin:0;letter-spacing:-0.02em}
         header p{color:var(--muted);font-size:13px;margin:6px 0 0}
-        .kicker{color:var(--amber);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;margin-bottom:6px}
-        .grid{display:grid;grid-template-columns:300px 1fr;gap:16px;margin-top:20px}
-        @media(max-width:820px){.grid{grid-template-columns:1fr}}
-        .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+        .planner-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+        .themebtn{flex:none;padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--txt);font:inherit;font-size:12px;cursor:pointer}
+        .themebtn:focus-visible,.toggle button:focus-visible,.pinbtn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+        .grid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;margin-top:20px}
+        @media(max-width:820px){.grid{grid-template-columns:minmax(0,1fr)}}
+        .panel{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
         .field-label{display:block;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}
         .field-wrap{display:flex;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:7px;margin-bottom:12px}
         .field-wrap:focus-within{border-color:var(--amber)}
@@ -177,6 +197,7 @@ export default function App() {
         .toggle button.on{border-color:var(--amber);color:var(--amber);background:rgba(255,176,32,.08)}
         .pinbtn{width:100%;margin-top:12px;padding:9px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--amber);font-size:12.5px;cursor:pointer;font-family:inherit}
         .pinbtn:hover{border-color:var(--amber)}
+        .grid > div{min-width:0}
         .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
         @media(max-width:640px){.cards{grid-template-columns:1fr}}
         .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
@@ -184,28 +205,33 @@ export default function App() {
         .card .val{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;margin-top:6px}
         .card .sub{font-size:12px;color:var(--muted);margin-top:4px}
         .runway{display:flex;gap:3px;margin-top:16px;align-items:flex-end;height:56px}
-        .runway .cell{flex:1;min-width:6px;border-radius:3px 3px 0 0;position:relative}
+        .runway .cell{flex:1;min-width:0;border-radius:3px 3px 0 0;position:relative}
         .legend{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-top:8px;flex-wrap:wrap}
         .dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:middle}
         table{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:12.5px}
         th{color:var(--muted);font-weight:500;text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.04em;white-space:nowrap}
         th:first-child,td:first-child{text-align:left}
-        td{text-align:right;padding:7px 10px;border-bottom:1px solid rgba(35,44,56,.5);white-space:nowrap}
+        td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
         tr:hover td{background:rgba(255,176,32,.04)}
         .pos{color:var(--pos)} .neg{color:var(--neg)} .amb{color:var(--amber)}
         .warn{margin-top:14px;padding:12px 14px;border-radius:8px;font-size:13px;line-height:1.5;border:1px solid}
-        .warn.high{border-color:rgba(242,85,90,.4);background:rgba(242,85,90,.07);color:#F5A3A6}
-        .warn.mid{border-color:rgba(255,176,32,.4);background:rgba(255,176,32,.06);color:#F0C878}
-        .warn.ok{border-color:rgba(62,207,142,.35);background:rgba(62,207,142,.06);color:#9BE3C4}
+        .warn.high{border-color:rgba(242,85,90,.4);background:rgba(242,85,90,.07);color:var(--neg)}
+        .warn.mid{border-color:rgba(255,176,32,.4);background:rgba(255,176,32,.06);color:var(--amber)}
+        .warn.ok{border-color:rgba(62,207,142,.35);background:rgba(62,207,142,.06);color:var(--pos)}
         .tblwrap{overflow-x:auto;margin-top:16px}
         h2{font-size:14px;margin:0 0 10px;font-weight:600}
       `}</style>
 
       <div className="shell">
-        <header>
-          <div className="kicker">Zaman · Para · Getiri</div>
-          <h1>Trader Zaman–Para Planlayıcısı</h1>
-          <p>Taksitler sermayeden düşer, kalan sermaye hedefe koşar. Zamanı ve gerekli getiriyi birlikte gör.</p>
+        <header className="planner-header">
+          <div>
+            <h1>Zaman–Para Planlayıcısı</h1>
+            <p>Taksitleri hesaba kat, hedefe kaç ayda ulaşacağını ve gereken getiriyi gör.</p>
+          </div>
+          <button type="button" className="themebtn" onClick={toggleTheme}
+            aria-label={theme === "light" ? "Koyu temaya geç" : "Açık temaya geç"}>
+            {theme === "light" ? "Koyu tema" : "Açık tema"}
+          </button>
         </header>
 
         <div className="grid">
@@ -331,22 +357,22 @@ export default function App() {
             <div className="panel" style={{ marginTop: 12, height: 260 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartRows} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-                  <CartesianGrid stroke="#232C38" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="ay" stroke="#7E8AA0" tick={{ fontSize: 11, fontFamily: "IBM Plex Mono" }} />
-                  <YAxis stroke="#7E8AA0" tick={{ fontSize: 11, fontFamily: "IBM Plex Mono" }} width={70}
+                  <CartesianGrid stroke="var(--line)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="ay" stroke="var(--muted)" tick={{ fontSize: 11, fontFamily: "IBM Plex Mono" }} />
+                  <YAxis stroke="var(--muted)" tick={{ fontSize: 11, fontFamily: "IBM Plex Mono" }} width={70}
                     tickFormatter={(v) => new Intl.NumberFormat("tr-TR", { notation: "compact" }).format(v)} />
                   <Tooltip
-                    contentStyle={{ background: "#141A22", border: "1px solid #232C38", borderRadius: 8, fontFamily: "IBM Plex Mono", fontSize: 12 }}
+                    contentStyle={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, fontFamily: "IBM Plex Mono", fontSize: 12 }}
                     labelFormatter={(l) => "Ay " + l}
                     formatter={(v) => fmtTL0(v)}
                   />
-                  <ReferenceLine y={target} stroke="#3ECF8E" strokeDasharray="4 4" label={{ value: "Hedef", fill: "#3ECF8E", fontSize: 11, position: "insideTopRight" }} />
-                  <ReferenceLine y={capital} stroke="#7E8AA0" strokeDasharray="2 4" label={{ value: "Başlangıç", fill: "#7E8AA0", fontSize: 11, position: "insideBottomRight" }} />
+                  <ReferenceLine y={target} stroke="var(--pos)" strokeDasharray="4 4" label={{ value: "Hedef", fill: "var(--pos)", fontSize: 11, position: "insideTopRight" }} />
+                  <ReferenceLine y={capital} stroke="var(--muted)" strokeDasharray="2 4" label={{ value: "Başlangıç", fill: "var(--muted)", fontSize: 11, position: "insideBottomRight" }} />
                   <Area type="monotone" dataKey="Net (Sermaye − Borç)" fill="rgba(255,176,32,0.08)" stroke="none" />
-                  <Line type="monotone" dataKey="Sermaye" stroke="#FFB020" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="Net (Sermaye − Borç)" stroke="#3ECF8E" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
-                  {inflation > 0 && <Line type="monotone" dataKey="Reel Sermaye" stroke="#7E8AA0" strokeWidth={1.5} dot={false} strokeDasharray="2 4" />}
-                  {pinned && <Line type="monotone" dataKey="Sabitlenen" stroke="#6FA8FF" strokeWidth={1.5} dot={false} />}
+                  <Line type="monotone" dataKey="Sermaye" stroke="var(--amber)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="Net (Sermaye − Borç)" stroke="var(--pos)" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
+                  {inflation > 0 && <Line type="monotone" dataKey="Reel Sermaye" stroke="var(--muted)" strokeWidth={1.5} dot={false} strokeDasharray="2 4" />}
+                  {pinned && <Line type="monotone" dataKey="Sabitlenen" stroke="var(--blue)" strokeWidth={1.5} dot={false} />}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -356,11 +382,11 @@ export default function App() {
               {riskLevel === "impossible" &&
                 "Bu süre sınırı içinde hedefe hiçbir makul getiriyle ulaşılamıyor. Süreyi uzat, hedefi düşür veya taksiti gelirden öde."}
               {riskLevel === "high" &&
-                `Hedef için gereken aylık ${fmtPct(reqReturn)} getiri, sürdürülebilir profesyonel standartların çok üzerinde. Bu tempo yüksek kaldıraç ve yüksek iflas riski demektir.`}
+                `Bu hedef için her ay ${fmtPct(reqReturn)} getiri gerekiyor. Daha uzun süre veya daha düşük hedefle gereken getirinin nasıl değiştiğini karşılaştır.`}
               {riskLevel === "mid" &&
-                `Gereken aylık ${fmtPct(reqReturn)} getiri iddialı ama imkânsız değil. İşlem başına riski %1–2 bandında tutmadan bu tempoyu kovalamak sermayeyi tehlikeye atar.`}
+                `Bu hedef, her ay ${fmtPct(reqReturn)} sabit getiri varsayımına dayanıyor. Daha düşük bir getiriyle süreyi yeniden hesaplayabilirsin.`}
               {riskLevel === "ok" &&
-                `Gereken aylık ${fmtPct(reqReturn)} getiri makul bir hedef. Disiplinli risk yönetimiyle (işlem başına %1–2) ulaşılabilir görünüyor.`}
+                `Bu varsayımlarla hedef için gereken aylık getiri ${fmtPct(reqReturn)}.`}
             </div>
           </div>
         </div>

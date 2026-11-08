@@ -1,17 +1,22 @@
-# Trader Zaman–Para Planlayıcısı
+# Zaman–Para Planlayıcısı
 
-Taksitli borcu olan bir yatırımcının sorusu basit ama hesabı sinsi: **taksitler sermayeden düşerken, kalan sermaye hedefe ne zaman ulaşır — ve bunun için ayda yüzde kaç getirmek gerekir?**
+Taksitleri öderken hedefe kaç ayda ulaşacağını ve belirli bir süre için gereken aylık getiriyi hesaplayan yerel React simülasyonu.
 
-Bu araç iki şeyi aynı anda gösterir: zaman ve gereken getiri. Çünkü tek başına ikisi de yanıltıcıdır. "12 ayda 150 bin TL" kulağa makul gelir; ayda %11 getiri gerektirdiğini görene kadar.
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/01-hedefe-ulasiliyor-acik.png">
+  <img src="screenshots/01-hedefe-ulasiliyor.png" alt="185.000 TL başlangıç sermayesi, 400.000 TL hedef, 22 aylık sonuç ve sermaye grafiği">
+</picture>
 
-![Hedefe ulaşan senaryo](screenshots/01-hedefe-ulasiliyor.png)
+Örnekte 185.000 TL sermaye, 9 ay boyunca 9.750 TL taksit ve aylık %6 varsayımıyla 400.000 TL hedefine 22 ayda ulaşılıyor.
 
 ## Ne yapar
+
+- **Açık ve koyu tema.** İlk açılışta sistem tercihi kullanılır; elle seçilen tema bu tarayıcıda saklanır.
 
 - **Ay ay simülasyon.** Her ay önce taksit sermayeden düşülür, kalan bakiye o ayın getirisiyle büyür. Sıralama önemlidir — önce ödeme, sonra kâr.
 - **Hedefe ulaşma süresi.** Girdiğin getiri varsayımıyla hedefe kaçıncı ayda varıldığı.
 - **Gerekli aylık getiri.** Ters yönden çözer: verdiğin süre sınırı içinde hedefe varmak için ayda yüzde kaç gerekiyor? İkili arama ile bulunur.
-- **Risk yorumu.** Gereken getiri bir eşiği aştığında araç seni uyarır. %10'un üzeri "yüksek kaldıraç ve yüksek iflas riski" olarak işaretlenir.
+- **Risk yorumu.** Gereken getiri bir eşiği aştığında araç seni uyarır. %10’un üzerindeki aylık getiri ayrı bir uyarıyla gösterilir.
 - **Sermaye pisti.** Her ay bir çubuk: kırmızı = başlangıç sermayesinin altında, sarı = büyüyor, yeşil = hedefte. Planın nerede dibe vurup nerede toparladığı tek bakışta görünür.
 - **İflas tespiti.** Taksit sermayeyi sıfırın altına indiriyorsa simülasyon durur ve bunu açıkça söyler.
 - **Enflasyon (opsiyonel).** Yıllık enflasyon girildiğinde araç reel değerleri de gösterir: bugünkü alım gücüyle hedefe kaçıncı ayda varılır, reel hedef için ayda yüzde kaç gerekir. Boş bırakılırsa (0) tüm hesap nominaldir.
@@ -19,9 +24,9 @@ Bu araç iki şeyi aynı anda gösterir: zaman ve gereken getiri. Çünkü tek b
 
 ## İki örnek senaryo
 
-**Plan tutuyor** — 185.000 TL sermaye, 9 ay boyunca 9.750 TL taksit, 24 ayda 400.000 TL hedef. %6 getiri varsayımıyla hedefe 22. ayda ulaşılıyor; süre sınırı için gereken getiri %5,40. İddialı ama imkânsız değil.
+**Plan tutuyor** — 185.000 TL sermaye, 9 ay boyunca 9.750 TL taksit, 24 ayda 400.000 TL hedef. %6 getiri varsayımıyla hedefe 22. ayda ulaşılıyor; süre sınırı için gereken getiri %5,40.
 
-**Yüksek risk** — 120.000 TL sermaye, 8 ay boyunca 7.500 TL taksit, 18 ayda 500.000 TL hedef. Gereken aylık getiri %10,95. Araç bunu kırmızıyla işaretler: bu tempo sürdürülebilir değil.
+**Yüksek risk** — 120.000 TL sermaye, 8 ay boyunca 7.500 TL taksit, 18 ayda 500.000 TL hedef. Gereken aylık getiri %10,95. Araç gereken getiriyi kırmızıyla işaretler.
 
 ![Yüksek riskli senaryo](screenshots/02-yuksek-risk.png)
 
